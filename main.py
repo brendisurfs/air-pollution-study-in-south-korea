@@ -38,6 +38,20 @@ class Measurement:
     pm25: float
 
 
+# Constants
+CO = "CO"
+O3 = "O3"
+SO2 = "SO2"
+NO2 = "NO2"
+PM2 = "PM2.5"
+PM10 = "PM10"
+DATE = "Date"
+ADDRESS = "Address"
+LATITUDE = "Latitude"
+LONGITUDE = "Longitude"
+STATION_CODE = "StationCode"
+
+
 def plot_linear_regression_corr(df: pl.DataFrame):
     data = df.to_numpy()
     labels = df.schema.names()
@@ -83,19 +97,49 @@ def clean_data(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter(pl.all().is_not_nan())
     df = df.fill_nan(0.0)
     return df
+    """
+    """
 
 
-CO = "CO"
-O3 = "O3"
-SO2 = "SO2"
-NO2 = "NO2"
-PM2 = "PM2.5"
-PM10 = "PM10"
-DATE = "Date"
-ADDRESS = "Address"
-LATITUDE = "Latitude"
-LONGITUDE = "Longitude"
-STATION_CODE = "StationCode"
+def detect_iqr_outliers(df: pl.DataFrame,
+                        column: str,
+                        mult: float = 1.5) -> pl.DataFrame:
+    """detect outliers using IQR
+
+    Args:
+        df: DataFrame
+        column: str
+        mult: float
+
+    Returns: DataFrame
+        
+    """
+    return df.with_columns([
+        pl.col(column).quantile(0.25).alias(f"{column}_q1"),
+        pl.col(column).quantile(0.75).alias(f"{column}_q3")
+    ]).with_columns([
+        # Calculates IQR
+        (pl.col(f"{column}_q3") - pl.col(f"{column}_q1")
+         ).alias(f"{column}_iqr")
+    ]).with_columns([
+        # Calculate Bounds
+        (pl.col(f"{column}_q1") - mult * pl.col(f"{column}_iqr")
+         ).alias(f"{column}_lower_bound"),
+        (pl.col(f"{column}_q3") -
+         mult * pl.col(f"{column}_iqr")).alias(f"{column}_upper_bound"),
+    ]).with_columns([
+        ((pl.col(column) < pl.col(f"{column}_lower_bound")) |
+         (pl.col(column)
+          > pl.col(f"{column}_upper_bound"))).alias(f"{column}_is_outlier"),
+        # Calculate outlier severity (how far beyond bounds)
+        pl.when(pl.col(column) > pl.col(f"{column}_upper_bound")).then(
+            (pl.col(column) - pl.col(f"{column}_upper_bound")) /
+            pl.col(f"{column}_iqr")
+        ).when(pl.col(column) < pl.col(f"{column}_lower_bound")).then(
+            (pl.col(f"{column}_lower_bound") - pl.col(column)) /
+            pl.col(f"{column}_iqr")
+        ).otherwise(0.0).alias(f"{column}_outlier_severity")
+    ])
 
 
 def main():
