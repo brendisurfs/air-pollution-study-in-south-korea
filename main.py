@@ -125,7 +125,7 @@ def detect_iqr_outliers(df: pl.DataFrame,
         # Calculate Bounds
         (pl.col(f"{column}_q1") - mult * pl.col(f"{column}_iqr")
          ).alias(f"{column}_lower_bound"),
-        (pl.col(f"{column}_q3") -
+        (pl.col(f"{column}_q3") +
          mult * pl.col(f"{column}_iqr")).alias(f"{column}_upper_bound"),
     ]).with_columns([
         ((pl.col(column) < pl.col(f"{column}_lower_bound")) |
@@ -190,8 +190,10 @@ def main():
         pl.Datetime).mean()
 
     print(f"Mean Highest Time: { mean_highest_particle_time }")
-    plot_linear_regression_corr(particle_corr)
+    # plot_linear_regression_corr(particle_corr)
 
+
+    print(detect_iqr_outliers(df, NO2))
 
 if __name__ == "__main__":
     main()
