@@ -19,6 +19,6 @@ The objectives of this project were to:
 - Identify interesting and novel patterns that correlate to seasonal changes
 - Understand the struggle over containing air pollution in South Korea, both from a scientific standpoint and political standpoint.
 
-### Link to paper
+### Links
 
 - [Final Paper](https://github.com/brendisurfs/air-pollution-study-in-south-korea/blob/main/main.pdf)
