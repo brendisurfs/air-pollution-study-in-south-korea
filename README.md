@@ -21,4 +21,4 @@ The objectives of this project were to:
 
 ### Link to paper
 
-
+- [Final Paper](https://github.com/brendisurfs/air-pollution-study-in-south-korea/blob/main/main.pdf)
