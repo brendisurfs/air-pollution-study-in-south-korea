@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from enum import StrEnum
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# PM2.5 is generally considered Hazardous above 250micrograms/m3
+# PM2.5 is generally considered Hazardous above 250 micrograms/m3
 HAZARDOUS_PM2_LEVEL = 250.0
 
 
@@ -39,17 +40,18 @@ class Measurement:
 
 
 # Constants
-CO = "CO"
-O3 = "O3"
-SO2 = "SO2"
-NO2 = "NO2"
-PM2 = "PM2.5"
-PM10 = "PM10"
-DATE = "Date"
-ADDRESS = "Address"
-LATITUDE = "Latitude"
-LONGITUDE = "Longitude"
-STATION_CODE = "StationCode"
+class Column(StrEnum):
+    CO = "CO"
+    O3 = "O3"
+    SO2 = "SO2"
+    NO2 = "NO2"
+    PM2 = "PM2.5"
+    PM10 = "PM10"
+    DATE = "Date"
+    ADDRESS = "Address"
+    LATITUDE = "Latitude"
+    LONGITUDE = "Longitude"
+    STATION_CODE = "StationCode"
 
 
 def plot_correlation(df: pl.DataFrame):
@@ -160,7 +162,7 @@ def cluster_outlier_frequency_severity(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def detect_compound_outliers(df: pl.DataFrame,
-                             compound_cols: list[str],
+                             compound_cols: list[Column],
                              mult: float = 1.5) -> pl.DataFrame:
     """
     Detect outliers across multiple pollutants at once
@@ -183,10 +185,10 @@ def detect_compound_outliers(df: pl.DataFrame,
 
 def aggregate_outliers(
     df: pl.DataFrame,
-    pollutant_columns: list[str],
+    pollutant_columns: list[Column],
 ) -> pl.DataFrame:
     # Get all relevant columns
-    relevant_cols = [DATE]
+    relevant_cols = [Column.DATE.value]
     for col in pollutant_columns:
         relevant_cols.extend([
             col, f"{col}_is_outlier", f"{col}_lower_bound",
@@ -221,12 +223,12 @@ def aggregate_outliers(
 
 def main():
     compound_list = [
-        CO,
-        O3,
-        SO2,
-        NO2,
-        PM2,
-        PM10,
+        Column.CO,
+        Column.O3,
+        Column.SO2,
+        Column.NO2,
+        Column.PM2,
+        Column.PM10,
     ]
 
     # Cast our features to the proper types
@@ -256,16 +258,15 @@ def main():
         pl.col("NO2").mean().round(3)).get_column("NO2").first()
     print(f"Mean NO2: { mean_no2 }")
 
-    mean_ozone = df.select(pl.col("O3").mean().round(3)).get_column(O3).first()
+    mean_ozone = df.select(pl.col(Column.O3).mean().round(3)).get_column(
+        Column.O3).first()
     print(f"Mean Ozone: {mean_ozone}")
 
     # Correlation
-    particle_corr = df.drop([DATE, STATION_CODE, LATITUDE, LONGITUDE
-                             ]).corr().select(pl.col(pl.Float64).round(3))
+    particle_corr = df.drop(
+        [Column.DATE, Column.STATION_CODE, Column.LATITUDE,
+         Column.LONGITUDE]).corr().select(pl.col(pl.Float64).round(3))
     print(f"Particle Corr.: {particle_corr}")
-
-    # NOTE: Plots our particles correlation via heat map
-    plot_correlation(particle_corr)
 
     # Finding Where PM2.5 leves spike beyond 300ppm
     # Looking for dates where PM2 and PM10 particle emissions are highest.
@@ -290,7 +291,10 @@ def main():
     # Shows the outlier as a proper percentage.
     print(f"Outlier Percentage: {outlier_pct * 100.0}")
 
+    # Plot our data
+    # NOTE: Plots our particles correlation via heat map
+    plot_correlation(particle_corr)
 
-# Cluster data
+
 if __name__ == "__main__":
     main()
