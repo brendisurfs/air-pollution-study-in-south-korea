@@ -52,10 +52,15 @@ LONGITUDE = "Longitude"
 STATION_CODE = "StationCode"
 
 
-def plot_linear_regression_corr(df: pl.DataFrame):
+def plot_correlation(df: pl.DataFrame):
+    """
+    Plots the dataframe as a correlation matrix
+
+    Args:
+        df: the Dataframe to operation on
+    """
     data = df.to_numpy()
     labels = df.schema.names()
-    print(labels)
     plt.figure(figsize=(8, 6))
     sns.heatmap(data,
                 annot=True,
@@ -97,8 +102,6 @@ def clean_data(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter(pl.all().is_not_nan())
     df = df.fill_nan(0.0)
     return df
-    """
-    """
 
 
 def detect_iqr_outliers(df: pl.DataFrame,
@@ -142,9 +145,91 @@ def detect_iqr_outliers(df: pl.DataFrame,
     ])
 
 
+def cluster_outlier_frequency_severity(df: pl.DataFrame) -> pl.DataFrame:
+    """Clusters outliers by their severity, returning frequency and mean severity.
+    Args:
+        df: DataFrame
+
+    Returns: DataFrame
+    """
+    return df.group_by("compound_name").agg([
+        pl.len().alias("frequency"),
+        pl.col("outlier_severity").mean().alias("mean_severity").round(3),
+        pl.col("outlier_severity").std().alias("std_severity").round(3),
+    ])
+
+
+def detect_compound_outliers(df: pl.DataFrame,
+                             compound_cols: list[str],
+                             mult: float = 1.5) -> pl.DataFrame:
+    """
+    Detect outliers across multiple pollutants at once
+    """
+    result_df = df
+
+    for col in compound_cols:
+        result_df = detect_iqr_outliers(result_df, col, mult)
+
+    outlier_cols = [f"{col}_is_outlier" for col in compound_cols]
+    severity_cols = [f"{col}_outlier_severity" for col in compound_cols]
+
+    return result_df.with_columns([
+        pl.any_horizontal(outlier_cols).alias("any_pollutant_outlier"),
+        pl.sum_horizontal(outlier_cols).alias("num_pollutants_outlier"),
+        pl.max_horizontal(severity_cols).alias("max_outlier_severity"),
+        pl.mean_horizontal(severity_cols).alias("avg_outlier_severity")
+    ])
+
+
+def aggregate_outliers(
+    df: pl.DataFrame,
+    pollutant_columns: list[str],
+) -> pl.DataFrame:
+    # Get all relevant columns
+    relevant_cols = [DATE]
+    for col in pollutant_columns:
+        relevant_cols.extend([
+            col, f"{col}_is_outlier", f"{col}_lower_bound",
+            f"{col}_upper_bound", f"{col}_iqr", f"{col}_outlier_severity"
+        ])
+
+    # Select only rows where any pollutant is an outlier
+    any_outlier = pl.any_horizontal(
+        [pl.col(f"{col}_is_outlier") for col in pollutant_columns])
+
+    df_filtered = df.filter(any_outlier).select(relevant_cols)
+
+    # Process each compound and stack results
+    compound_results: list[pl.DataFrame] = []
+
+    for compound in pollutant_columns:
+        compound_data = (df_filtered.filter(
+            pl.col(f"{compound}_is_outlier")
+        ).select([
+            pl.col("Date"),
+            pl.lit(compound).alias("compound_name"),
+            pl.col(compound).alias("compound_value"),
+            pl.col(f"{compound}_iqr").alias("compound_iqr"),
+            pl.col(f"{compound}_lower_bound").alias("compound_lower_bound"),
+            pl.col(f"{compound}_upper_bound").alias("compound_upper_bound"),
+            pl.col(f"{compound}_outlier_severity").alias("outlier_severity"),
+        ]))
+        compound_results.append(compound_data)
+
+    return pl.concat(compound_results).sort(["Date", "compound_name"])
+
+
 def main():
-    # Load file
-    print("loading csv")
+    compound_list = [
+        CO,
+        O3,
+        SO2,
+        NO2,
+        PM2,
+        PM10,
+    ]
+
+    # Cast our features to the proper types
     df = pl.read_csv("./AirPollutionSeoul/Measurement_summary.csv",
                      schema={
                          "Date": pl.Datetime,
@@ -159,12 +244,10 @@ def main():
                          "PM10": pl.Float64,
                          "PM2.5": pl.Float64,
                      })
-
-    print("Dropping address")
     df = df.drop(["Address"])
     df = df.filter(pl.col("SO2") > 0)
 
-    # mean values
+    # Display the mean values of each chemical compound
     mean_so2 = df.select(
         pl.col("SO2").mean().round(3)).get_column("SO2").first()
     print(f"Mean SO2: { mean_so2 }")
@@ -176,12 +259,15 @@ def main():
     mean_ozone = df.select(pl.col("O3").mean().round(3)).get_column(O3).first()
     print(f"Mean Ozone: {mean_ozone}")
 
-    # Temporal Findings
-    # Finding Where PM2.5 leves spike beyond 300ppm
+    # Correlation
     particle_corr = df.drop([DATE, STATION_CODE, LATITUDE, LONGITUDE
                              ]).corr().select(pl.col(pl.Float64).round(3))
     print(f"Particle Corr.: {particle_corr}")
 
+    # NOTE: Plots our particles correlation via heat map
+    plot_correlation(particle_corr)
+
+    # Finding Where PM2.5 leves spike beyond 300ppm
     # Looking for dates where PM2 and PM10 particle emissions are highest.
     highest_particles = df.filter(pl.col("PM2.5") > HAZARDOUS_PM2_LEVEL)
 
@@ -190,10 +276,21 @@ def main():
         pl.Datetime).mean()
 
     print(f"Mean Highest Time: { mean_highest_particle_time }")
-    # plot_linear_regression_corr(particle_corr)
+
+    # Outliers
+    outlier_df = detect_compound_outliers(df, compound_list)
+    compound_outliers_df = aggregate_outliers(outlier_df, compound_list)
+    total_outliers = cluster_outlier_frequency_severity(
+        compound_outliers_df).select(pl.col("frequency").sum())
+
+    outlier_pct = float(
+        (total_outliers / df.count()).get_column("frequency").round(5).cast(
+            pl.Float64).to_list()[0])
+
+    # Shows the outlier as a proper percentage.
+    print(f"Outlier Percentage: {outlier_pct * 100.0}")
 
 
-    print(detect_iqr_outliers(df, NO2))
-
+# Cluster data
 if __name__ == "__main__":
     main()
