@@ -18,3 +18,7 @@ The objectives of this project were to:
 - Parse and analyze historical air pollution data for South Korea
 - Identify interesting and novel patterns that correlate to seasonal changes
 - Understand the struggle over containing air pollution in South Korea, both from a scientific standpoint and political standpoint.
+
+### Link to paper
+
+
