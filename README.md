@@ -22,3 +22,10 @@ The objectives of this project were to:
 ### Links
 
 - [Final Paper](https://github.com/brendisurfs/air-pollution-study-in-south-korea/blob/main/main.pdf)
+
+### Instructions to run
+
+For the easiest time running this, it is recommended to have [Just](https://github.com/casey/just) and [UV](https://docs.astral.sh/uv/) installed.
+Create a virtual env with uv, source the env, and run the `run` command in the justfile.
+
+Example: ""
